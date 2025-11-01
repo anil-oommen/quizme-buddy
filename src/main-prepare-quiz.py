@@ -10,7 +10,7 @@ LLM_PROMPT_PREPARE_QUIZ = ("You are an expert quiz creator. preparing a quiz for
                            " Each question should have four options, labeled A, B, C, and D, with one correct answer. "
                            " Ensure that the questions cover key concepts and details from the image. "
                            " provide the expected answers after each question. "
-                           " limit to only 3 questions. ")
+                           " limit to only 2 questions. and provide the output in markdown format.")
 
 def main():
     
