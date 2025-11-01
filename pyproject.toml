@@ -1,0 +1,13 @@
+[project]
+name = "quizme-buddy"
+version = "0.1.0"
+description = "A tool to generate quiz questions from images using an LLM."
+authors = [{ name = "Gemini", email = "gemini@google.com" }]
+requires-python = ">=3.9"
+dependencies = [
+    "python-dotenv",
+    "pillow>=11.3.0",
+    "openai>=2.6.1",
+    "pymupdf>=1.26.5",
+]
+
