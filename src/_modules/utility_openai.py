@@ -1,5 +1,9 @@
+import logging
 from openai import OpenAI
 from .utility_pdfs_images import encode_image_to_base64
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 DEFAULT_AI_LLM_MODEL = "qwen2.5vl:32b"  # or "llava" for Ollama
 
@@ -44,5 +48,5 @@ def generate_questions_from_image(api_key, base_url, image_path, prompt, llm_mod
         return response.choices[0].message.content
     except Exception as e:
         # Log the error but don't expose internal details
-        print(f"API Error: {type(e).__name__}")
+        logger.error(f"API Error: {type(e).__name__}")
         return "An error occurred while communicating with the API. Please check your configuration."

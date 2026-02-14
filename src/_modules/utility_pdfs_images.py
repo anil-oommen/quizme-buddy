@@ -1,7 +1,10 @@
-import os,re, io, base64
+import os,re, io, base64, logging
 from pathlib import Path
 from PIL import Image as PImage
 import pymupdf as pdfutil
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 def _validate_path_safety(file_path, base_dir=None):
@@ -24,7 +27,6 @@ def _validate_path_safety(file_path, base_dir=None):
     path = Path(file_path).resolve()
     
     # Check for suspicious patterns (though resolve() should handle these)
-    path_str = str(path)
     if '..' in Path(file_path).parts:
         raise ValueError(f"Path traversal detected in path: {file_path}")
     
@@ -151,12 +153,13 @@ def encode_image_to_base64(image_path):
         # Validate image path
         image_path_obj = _validate_path_safety(image_path)
         if not image_path_obj.exists():
-            print(f"Error: The file '{image_path}' was not found.")
+            logger.error(f"The file '{image_path}' was not found.")
             return None
         
         with PImage.open(image_path_obj) as img:
-            if img.format != 'PNG':
-                print("Warning: Image is not in PNG format. Converting to PNG.")
+            # Check if format is PNG, handle cases where format might be None
+            if img.format and img.format != 'PNG':
+                logger.warning("Image is not in PNG format. Converting to PNG.")
                 # Convert to PNG in memory
                 buffer = io.BytesIO()
                 img.save(buffer, format="PNG")
@@ -166,8 +169,8 @@ def encode_image_to_base64(image_path):
                 with open(image_path_obj, "rb") as image_file:
                     return base64.b64encode(image_file.read()).decode('utf-8')
     except FileNotFoundError:
-        print(f"Error: The file '{image_path}' was not found.")
+        logger.error(f"The file '{image_path}' was not found.")
         return None
     except Exception as e:
-        print(f"An error occurred while processing the image: {e}")
+        logger.error(f"An error occurred while processing the image: {e}")
         return None
