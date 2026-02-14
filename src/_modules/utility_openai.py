@@ -43,4 +43,6 @@ def generate_questions_from_image(api_key, base_url, image_path, prompt, llm_mod
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"An error occurred while communicating with the API: {e}"
+        # Log the error but don't expose internal details
+        print(f"API Error: {type(e).__name__}")
+        return "An error occurred while communicating with the API. Please check your configuration."
