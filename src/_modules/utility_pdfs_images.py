@@ -1,16 +1,73 @@
-import os,re, io, base64
+import os,re, io, base64, logging
+from pathlib import Path
 from PIL import Image as PImage
 import pymupdf as pdfutil
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+def _validate_path_safety(file_path, base_dir=None):
+    """
+    Validates that a file path is safe and doesn't contain path traversal attempts.
+    
+    Args:
+        file_path (str): The file path to validate
+        base_dir (str, optional): The base directory to check against. If provided,
+                                 ensures the resolved path is within this directory.
+    
+    Returns:
+        Path: The validated, resolved Path object
+        
+    Raises:
+        ValueError: If the path contains potentially dangerous sequences or 
+                   resolves outside the base directory
+    """
+    # Convert to Path object and resolve to absolute path
+    path = Path(file_path).resolve()
+    
+    # Check for suspicious patterns (though resolve() should handle these)
+    if '..' in Path(file_path).parts:
+        raise ValueError(f"Path traversal detected in path: {file_path}")
+    
+    # If base_dir is provided, ensure the path is within it
+    if base_dir:
+        base_path = Path(base_dir).resolve()
+        try:
+            # This will raise ValueError if path is not relative to base_path
+            path.relative_to(base_path)
+        except ValueError:
+            raise ValueError(f"Path {file_path} is outside the allowed directory {base_dir}")
+    
+    return path
+
+
 # Create a single image from all pages of a PDF document
 def convert_pdf_docs_in_folder_to_images(source_dir, output_dir,from_page = 1, to_page = 0, dpi=300, file_name_pattern=None):
-    for filename in os.listdir(source_dir):
+    # Validate base directories
+    source_path = _validate_path_safety(source_dir)
+    output_path = _validate_path_safety(output_dir)
+    
+    # Ensure directories exist
+    if not source_path.is_dir():
+        raise ValueError(f"Source directory does not exist: {source_dir}")
+    if not output_path.exists():
+        output_path.mkdir(parents=True, exist_ok=True)
+    
+    for filename in os.listdir(source_path):
         if file_name_pattern and not re.search(file_name_pattern,filename):
             continue
         if filename.lower().endswith(".pdf"):
-            pdf_path = os.path.join(source_dir, filename)
-            output_image_path = os.path.join(output_dir, os.path.splitext(filename)[0] + '.png')
-            convert_pdf_doc_to_image(pdf_path, output_image_path,from_page, to_page, dpi)
+            # Use Path for secure path joining - prevents traversal
+            pdf_path = source_path / filename
+            # Validate the constructed path is still within source_dir
+            _validate_path_safety(pdf_path, source_path)
+            
+            output_image_path = output_path / f"{pdf_path.stem}.png"
+            # Validate the output path is still within output_dir
+            _validate_path_safety(output_image_path, output_path)
+            
+            convert_pdf_doc_to_image(str(pdf_path), str(output_image_path),from_page, to_page, dpi)
     print("Created single image from all PDF pages.")
     
     # convert_pdf_to_images("DBS_POSB Consolidated Statement_Dec2018.pdf")
@@ -19,7 +76,18 @@ def convert_pdf_docs_in_folder_to_images(source_dir, output_dir,from_page = 1, t
 
 # Create a single image from all pages of a PDF document
 def convert_pdf_doc_to_image(pdf_path, output_image_path, from_page = 1, to_page = 0, dpi=300, match_content=None):
-    doc = pdfutil.open(pdf_path)
+    # Validate input paths
+    pdf_path_obj = _validate_path_safety(pdf_path)
+    if not pdf_path_obj.exists():
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+    if not pdf_path_obj.suffix.lower() == '.pdf':
+        raise ValueError(f"File is not a PDF: {pdf_path}")
+    
+    # Validate output path (directory must exist or be creatable)
+    output_path_obj = _validate_path_safety(output_image_path)
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+    
+    doc = pdfutil.open(str(pdf_path_obj))
     page_images = []
     total_height = 0
     max_width = 0
@@ -82,20 +150,27 @@ def convert_pdf_doc_to_image(pdf_path, output_image_path, from_page = 1, to_page
 def encode_image_to_base64(image_path):
     """Encodes an image file to a base64 string."""
     try:
-        with PImage.open(image_path) as img:
-            if img.format != 'PNG':
-                print("Warning: Image is not in PNG format. Converting to PNG.")
+        # Validate image path
+        image_path_obj = _validate_path_safety(image_path)
+        if not image_path_obj.exists():
+            logger.error(f"The file '{image_path}' was not found.")
+            return None
+        
+        with PImage.open(image_path_obj) as img:
+            # Check if format is PNG, handle cases where format might be None
+            if img.format and img.format != 'PNG':
+                logger.warning("Image is not in PNG format. Converting to PNG.")
                 # Convert to PNG in memory
                 buffer = io.BytesIO()
                 img.save(buffer, format="PNG")
                 buffer.seek(0)
                 return base64.b64encode(buffer.getvalue()).decode('utf-8')
             else:
-                with open(image_path, "rb") as image_file:
+                with open(image_path_obj, "rb") as image_file:
                     return base64.b64encode(image_file.read()).decode('utf-8')
     except FileNotFoundError:
-        print(f"Error: The file '{image_path}' was not found.")
+        logger.error(f"The file '{image_path}' was not found.")
         return None
     except Exception as e:
-        print(f"An error occurred while processing the image: {e}")
+        logger.error(f"An error occurred while processing the image: {e}")
         return None
